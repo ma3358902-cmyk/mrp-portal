@@ -1,35 +1,64 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { JwtGuard } from '../auth/jwt.guard';
 
-@UseGuards(JwtGuard)
 @Controller('master')
 export class MasterController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  @Get('items') async items() { return this.prisma.finishedGoodItem.findMany({ orderBy: { id: 'asc' } }); }
-  @Post('items') async addItem(@Body() b:any){
-    return this.prisma.finishedGoodItem.create({ data:{ code:b.code, name:b.name, category:b.category, subCategory:b.subCategory, uom:b.uom||'KG' } });
+  // Finished goods -> map to our Recipe
+  @Get('items')
+  async items() {
+    const recipes = await this.prisma.recipe.findMany({ orderBy: { id: 'asc' } });
+    // shape to a simpler “item” view
+    return recipes.map(r => ({
+      code: r.itemCode,
+      name: r.itemName,
+      category: r.category,
+      description: r.description,
+      normalLoss: r.normalLoss,
+    }));
   }
 
-  @Get('raw') async raw() { return this.prisma.rawMaterialItem.findMany({ orderBy: { id:'asc' } }); }
-  @Post('raw') async addRaw(@Body() b:any){
-    return this.prisma.rawMaterialItem.create({ data:{ code:b.code, name:b.name, uom:b.uom||'KG', supplier:b.supplier||null } });
-  }
-
-  @Get('plants') async plants() { return this.prisma.plant.findMany({ orderBy: { id:'asc' } }); }
-
-  @Get('boms') async boms() {
-    return this.prisma.bOM.findMany({ include:{ fg:true, lines:{ include:{ rm:true } } }, orderBy:{ id:'asc' } });
-  }
-  @Post('boms') async addBom(@Body() b:any){
-    const existing = await this.prisma.bOM.findFirst({ where:{ fgId:b.fgId, status:'ACTIVE' }, orderBy:{ version:'desc' } });
-    const version = existing ? existing.version + 1 : 1;
-    return this.prisma.bOM.create({
-      data:{
-        fgId:b.fgId, version, normalLossPct: b.normalLossPct ?? 0, effectiveFrom:new Date(),
-        lines:{ create: b.lines.map((l:any)=>({ rmId:l.rmId, rmPct:l.rmPct })) }
-      }
+  @Post('items')
+  async createItem(@Body() b: any) {
+    // minimal create for Recipe
+    return this.prisma.recipe.create({
+      data: {
+        itemCode: b.code,
+        itemName: b.name,
+        description: b.description ?? null,
+        category: b.category,        // must be one of: 'BOPP' | 'CPP' | 'BOPET'
+        normalLoss: b.normalLoss ?? 0,
+      },
     });
+  }
+
+  // Raw-materials -> RawMaterial
+  @Get('raw')
+  async raw() {
+    return this.prisma.rawMaterial.findMany({ orderBy: { id: 'asc' } });
+  }
+
+  @Post('raw')
+  async createRaw(@Body() b: any) {
+    return this.prisma.rawMaterial.create({
+      data: {
+        code: b.code,
+        name: b.name,
+        description: b.description ?? null,
+        supplier: b.supplier ?? null,
+      },
+    });
+  }
+
+  // Plants — not yet modeled; return a simple static list for now
+  @Get('plants')
+  async plants() {
+    return [
+      { id: 1, code: 'IPAK', name: 'IPAK' },
+      { id: 2, code: 'GPAK', name: 'GPAK' },
+      { id: 3, code: 'CPAK', name: 'CPAK' },
+      { id: 4, code: 'PETPAK', name: 'PETPAK' },
+    ];
   }
 }
