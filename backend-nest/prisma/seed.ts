@@ -1,13 +1,13 @@
 // prisma/seed.ts
 import { PrismaClient, Category, PlantCode, Role } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
   // --- 1) Admin user -------------------------------------------------------
   const adminEmail = 'admin@example.com';
-  const adminPassword = 'admin123'; // change later in real use
+  const adminPassword = 'admin123'; // change in production
   const adminHash = await bcrypt.hash(adminPassword, 10);
 
   await prisma.user.upsert({
@@ -17,15 +17,25 @@ async function main() {
       name: 'Admin',
       email: adminEmail,
       passwordHash: adminHash,
-      role: Role.ADMIN,
+      role: Role.ADMIN, // enum: ADMIN | USER
     },
   });
 
-  // --- 2) Plants ------------------------------------------------------------
+  // (Optional) a couple of regular users for testing
+  const userHash = await bcrypt.hash('ChangeMe123!', 10);
+  await prisma.user.createMany({
+    data: [
+      { name: 'Sales Local', email: 'sales.local@mrp.local', passwordHash: userHash, role: Role.USER },
+      { name: 'Ops',         email: 'ops@mrp.local',         passwordHash: userHash, role: Role.USER },
+    ],
+    skipDuplicates: true,
+  });
+
+  // --- 2) Plants (Plant + PlantCode enum) ----------------------------------
   const plants: Array<{ code: PlantCode; name: string }> = [
-    { code: PlantCode.IPAK, name: 'IPAK' },
-    { code: PlantCode.GPAK, name: 'GPAK' },
-    { code: PlantCode.CPAK, name: 'CPAK' },
+    { code: PlantCode.IPAK,   name: 'IPAK' },
+    { code: PlantCode.GPAK,   name: 'GPAK' },
+    { code: PlantCode.CPAK,   name: 'CPAK' },
     { code: PlantCode.PETPAK, name: 'PETPAK' },
   ];
 
@@ -39,62 +49,35 @@ async function main() {
 
   // --- 3) Raw Materials -----------------------------------------------------
   const rms: Array<{ code: string; name: string; uom?: string; supplier?: string | null }> = [
-    { code: 'RM-RESIN', name: 'Polymer Resin', uom: 'KG' },
-    { code: 'RM-ADDITIVE', name: 'Additive Pack', uom: 'KG' },
-    { code: 'RM-SOLVENT', name: 'Solvent', uom: 'L' },
+    { code: 'RM-RESIN',    name: 'Polymer Resin',  uom: 'KG' },
+    { code: 'RM-ADDITIVE', name: 'Additive Pack',  uom: 'KG' },
+    { code: 'RM-SOLVENT',  name: 'Solvent',        uom: 'L'  },
   ];
 
   for (const rm of rms) {
     await prisma.rawMaterial.upsert({
-      where: { code: rm.code }, // unique
-      update: {
-        name: rm.name,
-        uom: rm.uom ?? 'KG',
-        supplier: rm.supplier ?? null,
-      },
-      create: {
-        code: rm.code,
-        name: rm.name,
-        uom: rm.uom ?? 'KG',
-        supplier: rm.supplier ?? null,
-      },
+      where: { code: rm.code },
+      update: { name: rm.name, uom: rm.uom ?? 'KG', supplier: rm.supplier ?? null },
+      create: { code: rm.code, name: rm.name, uom: rm.uom ?? 'KG', supplier: rm.supplier ?? null },
     });
   }
 
   // --- 4) Finished Goods ----------------------------------------------------
-  const fgs: Array<{
-    code: string;
-    name: string;
-    category?: Category | null;
-    subCategory?: string | null;
-    uom?: string | null;
-  }> = [
-    { code: 'FG-BOPP-01', name: 'BOPP Film A', category: Category.BOPP, uom: 'KG' },
-    { code: 'FG-CPP-01', name: 'CPP Film A', category: Category.CPP, uom: 'KG' },
+  const fgs: Array<{ code: string; name: string; category?: Category | null; subCategory?: string | null; uom?: string | null; }> = [
+    { code: 'FG-BOPP-01',  name: 'BOPP Film A',  category: Category.BOPP,  uom: 'KG' },
+    { code: 'FG-CPP-01',   name: 'CPP Film A',   category: Category.CPP,   uom: 'KG' },
     { code: 'FG-BOPET-01', name: 'BOPET Film A', category: Category.BOPET, uom: 'KG' },
   ];
 
   for (const fg of fgs) {
     await prisma.finishedGood.upsert({
-      where: { code: fg.code }, // unique
-      update: {
-        name: fg.name,
-        category: fg.category ?? null,
-        subCategory: fg.subCategory ?? null,
-        uom: fg.uom ?? 'KG',
-      },
-      create: {
-        code: fg.code,
-        name: fg.name,
-        category: fg.category ?? null,
-        subCategory: fg.subCategory ?? null,
-        uom: fg.uom ?? 'KG',
-      },
+      where: { code: fg.code },
+      update: { name: fg.name, category: fg.category ?? null, subCategory: fg.subCategory ?? null, uom: fg.uom ?? 'KG' },
+      create: { code: fg.code, name: fg.name, category: fg.category ?? null, subCategory: fg.subCategory ?? null, uom: fg.uom ?? 'KG' },
     });
   }
 
-  // --- 5) A sample BOM for FG-BOPP-01 --------------------------------------
-  // Only create one ACTIVE BOM if none exists yet for this FG.
+  // --- 5) Sample BOM for FG-BOPP-01 (only if no ACTIVE BOM exists) ---------
   const fg = await prisma.finishedGood.findUnique({ where: { code: 'FG-BOPP-01' } });
   if (fg) {
     const existingActive = await prisma.bOM.findFirst({
@@ -102,12 +85,11 @@ async function main() {
     });
 
     if (!existingActive) {
-      // resolve RM ids
-      const rmResin = await prisma.rawMaterial.findUnique({ where: { code: 'RM-RESIN' } });
+      const rmResin    = await prisma.rawMaterial.findUnique({ where: { code: 'RM-RESIN' } });
       const rmAdditive = await prisma.rawMaterial.findUnique({ where: { code: 'RM-ADDITIVE' } });
 
       const linesData: Array<{ rmId: number; qty: number }> = [];
-      if (rmResin) linesData.push({ rmId: rmResin.id, qty: 0.92 });
+      if (rmResin)    linesData.push({ rmId: rmResin.id,    qty: 0.92 });
       if (rmAdditive) linesData.push({ rmId: rmAdditive.id, qty: 0.08 });
 
       await prisma.bOM.create({
@@ -115,22 +97,20 @@ async function main() {
           fgId: fg.id,
           version: 1,
           status: 'ACTIVE',
-          lines: {
-            createMany: { data: linesData },
-          },
+          lines: { createMany: { data: linesData } },
         },
       });
     }
   }
+
+  console.log('✅ Seed completed.');
 }
 
 main()
-  .then(async () => {
-    console.log('Seed completed.');
-    await prisma.$disconnect();
-  })
   .catch(async (e) => {
-    console.error('Seed failed:', e);
-    await prisma.$disconnect();
+    console.error('❌ Seed failed:', e);
     process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });
