@@ -1,75 +1,31 @@
-generator client {
-  provider = "prisma-client-js"
-}
+import { INestApplication, Injectable, OnModuleInit } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+@Injectable()
+export class PrismaService extends PrismaClient implements OnModuleInit {
+  constructor() {
+    // Pass DATABASE_URL from env (Render sets it from your blueprint)
+    super({
+      datasources: {
+        db: { url: process.env.DATABASE_URL },
+      },
+    });
+  }
 
-enum Role {
-  SALES_LOCAL
-  SALES_EXPORT
-  OPS
-  SUPPLY_CHAIN
-  TREASURY
-  FINANCE
-  ADMIN
-}
+  async onModuleInit() {
+    await this.$connect();
+  }
 
-enum Category {
-  BOPP
-  CPP
-  BOPET
-}
-
-enum PlantCode {
-  IPAK
-  GPAK
-  CPAK
-  PETPAK
-}
-
-model User {
-  id            Int      @id @default(autoincrement())
-  name          String
-  email         String   @unique
-  passwordHash  String
-  role          Role
-  createdAt     DateTime @default(now())
-}
-
-model Recipe {
-  id          Int       @id @default(autoincrement())
-  itemCode    String    @unique
-  itemName    String
-  description String?
-  category    Category
-  normalLoss  Float     @default(0)
-
-  // Compositions will hold the % of each raw material (by component)
-  compositions Composition[]
-}
-
-model RawMaterial {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  name        String
-  description String?
-  supplier    String?
-  createdAt   DateTime @default(now())
-
-  compositions Composition[]
-}
-
-model Composition {
-  id            Int         @id @default(autoincrement())
-  recipeId      Int
-  rawMaterialId Int
-  percentage    Float
-
-  recipe      Recipe      @relation(fields: [recipeId], references: [id])
-  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id])
-
-  @@unique([recipeId, rawMaterialId])
+  /**
+   * Call this once in your bootstrap after creating the Nest app:
+   *   const app = await NestFactory.create(AppModule);
+   *   const prisma = app.get(PrismaService);
+   *   await prisma.enableShutdownHooks(app);
+   */
+  async enableShutdownHooks(app: INestApplication) {
+    // Cast to any to avoid TS complaining about event name typings
+    (this as any).$on('beforeExit', async () => {
+      await app.close();
+    });
+  }
 }
