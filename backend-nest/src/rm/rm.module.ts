@@ -1,12 +1,10 @@
+// backend-nest/src/rm/rm.module.ts
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { RMController } from './rm.controller';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtGuard } from '../auth/jwt.guard';
+import { RmController } from './rm.controller';
 
 @Module({
-  imports:[JwtModule.register({ secret: process.env.JWT_SECRET || 'dev_secret' })],
-  providers:[PrismaService, JwtGuard],
-  controllers:[RMController]
+  controllers: [RmController],
+  providers: [],
+  exports: [],
 })
-export class RMModule {}
+export class RmModule {}
