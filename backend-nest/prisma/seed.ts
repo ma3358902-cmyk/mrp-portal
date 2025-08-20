@@ -1,50 +1,76 @@
-import { PrismaClient, Role, Category, PlantCode } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { PrismaClient, Role } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+
 const prisma = new PrismaClient();
 
+/**
+ * Safe upsert for optional models. If the model doesn't exist in your Prisma
+ * schema (e.g., no Plant model), this just logs and continues.
+ */
+async function upsertIfModelExists(
+  modelName: string,
+  args: { where: any; create: any; update?: any }
+) {
+  const anyPrisma = prisma as any;
+  const model = anyPrisma[modelName];
+  if (!model || typeof model.upsert !== 'function') {
+    console.log(`[seed] Model '${modelName}' not found. Skipping.`);
+    return;
+  }
+  await model.upsert({
+    where: args.where,
+    update: args.update ?? {},
+    create: args.create,
+  });
+  console.log(`[seed] Upserted into ${modelName}:`, args.where);
+}
+
 async function main() {
-  const salt = bcrypt.genSaltSync(10);
-  await prisma.user.createMany({
-    data: [
-      { name:'Admin', email:'admin@mrp.local', passwordHash:bcrypt.hashSync('admin123', salt), role:'ADMIN' as Role },
-      { name:'Sales Local', email:'sales.local@mrp.local', passwordHash:bcrypt.hashSync('sales123', salt), role:'SALES_LOCAL' as Role },
-      { name:'Ops', email:'ops@mrp.local', passwordHash:bcrypt.hashSync('ops123', salt), role:'OPS' as Role },
-      { name:'Supply Chain', email:'sc@mrp.local', passwordHash:bcrypt.hashSync('sc123', salt), role:'SUPPLY_CHAIN' as Role }
-    ],
-    skipDuplicates: true
+  console.log('[seed] Seeding start');
+
+  // 1) Admin user
+  const adminEmail = 'admin@mrp.local';
+  const adminPassword = 'admin123';
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      passwordHash,
+      role: Role.ADMIN, // Role enum exists in your schema
+      // If your User has 'name' or other fields, add them here as needed:
+      // name: 'Admin',
+    },
   });
+  console.log('[seed] Admin user ready:', adminEmail);
 
-  await prisma.plant.createMany({
-    data: [
-      { code:'IPAK' as PlantCode, type:'BOPP' as Category },
-      { code:'GPAK' as PlantCode, type:'BOPP' as Category },
-      { code:'CPAK' as PlantCode, type:'CPP' as Category },
-      { code:'PETPAK' as PlantCode, type:'BOPET' as Category }
-    ],
-    skipDuplicates: true
-  });
+  // 2) Plants (safe even if your schema doesn't have Plant model)
+  const plants = [
+    { code: 'IPAK', name: 'BOPP Plant - IPAK' },
+    { code: 'GPAK', name: 'BOPP Plant - GPAK' },
+    { code: 'CPAK', name: 'CPP Plant - CPAK' },
+    { code: 'PETAPK', name: 'BOPET Plant - PETAPK' },
+  ];
 
-  const rmPP = await prisma.rawMaterialItem.upsert({ where:{ code:'RM-PP' }, update:{}, create:{ code:'RM-PP', name:'Polypropylene (PP)'} });
-  const rmPE = await prisma.rawMaterialItem.upsert({ where:{ code:'RM-PE' }, update:{}, create:{ code:'RM-PE', name:'Polyethylene (PE)'} });
-  const rmADD = await prisma.rawMaterialItem.upsert({ where:{ code:'RM-ADD' }, update:{}, create:{ code:'RM-ADD', name:'Additives'} });
-
-  const bopp = await prisma.finishedGoodItem.upsert({ where:{ code:'BOPP-20-MT' }, update:{}, create:{ code:'BOPP-20-MT', name:'BOPP Metallized 20µ', category:'BOPP', subCategory:'Metallized', uom:'KG' } });
-  const cpp  = await prisma.finishedGoodItem.upsert({ where:{ code:'CPP-25-TR' }, update:{}, create:{ code:'CPP-25-TR', name:'CPP Transparent 25µ', category:'CPP', subCategory:'Transparent', uom:'KG' } });
-  const pet  = await prisma.finishedGoodItem.upsert({ where:{ code:'BOPET-12-TR' }, update:{}, create:{ code:'BOPET Transparent 12µ', category:'BOPET', subCategory:'Transparent', uom:'KG' } });
-
-  async function mkBom(fgId:number){
-    return prisma.bOM.create({
-      data:{
-        fgId, version:1, normalLossPct:0.02, effectiveFrom:new Date(),
-        lines:{ create:[
-          { rmId:rmPP.id, rmPct:0.85 },
-          { rmId:rmPE.id, rmPct:0.10 },
-          { rmId:rmADD.id, rmPct:0.03 }
-        ]}
-      }
+  for (const p of plants) {
+    await upsertIfModelExists('plant', {
+      where: { code: p.code },
+      create: { code: p.code, name: p.name },
+      update: {},
     });
   }
-  await mkBom(bopp.id); await mkBom(cpp.id); await mkBom(pet.id);
-  console.log('Seeded users, plants, items, BOMs');
+
+  console.log('[seed] Seeding complete');
 }
-main().finally(()=>prisma.$disconnect());
+
+main()
+  .catch((e) => {
+    console.error('[seed] Error:', e);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
