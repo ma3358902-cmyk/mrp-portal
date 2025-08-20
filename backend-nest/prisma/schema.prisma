@@ -1,148 +1,75 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
-enum Role { SALES_LOCAL SALES_EXPORT OPS SUPPLY_CHAIN TREASURY FINANCE ADMIN }
-enum Category { BOPP CPP BOPET }
-enum PlantCode { IPAK GPAK CPAK PETPAK }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SALES_LOCAL
+  SALES_EXPORT
+  OPS
+  SUPPLY_CHAIN
+  TREASURY
+  FINANCE
+  ADMIN
+}
+
+enum Category {
+  BOPP
+  CPP
+  BOPET
+}
+
+enum PlantCode {
+  IPAK
+  GPAK
+  CPAK
+  PETPAK
+}
 
 model User {
-  id           Int       @id @default(autoincrement())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         Role
-  createdAt    DateTime  @default(now())
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role
+  createdAt     DateTime @default(now())
 }
 
-model Plant {
-  id     Int       @id @default(autoincrement())
-  code   PlantCode @unique
-  type   Category
-  active Boolean   @default(true)
+model Recipe {
+  id          Int       @id @default(autoincrement())
+  itemCode    String    @unique
+  itemName    String
+  description String?
+  category    Category
+  normalLoss  Float     @default(0)
+
+  // Compositions will hold the % of each raw material (by component)
+  compositions Composition[]
 }
 
-model FinishedGoodItem {
+model RawMaterial {
   id          Int      @id @default(autoincrement())
   code        String   @unique
   name        String
-  category    Category
-  subCategory String
-  uom         String   @default("KG")
-  status      String   @default("ACTIVE")
-  boms        BOM[]
+  description String?
+  supplier    String?
+  createdAt   DateTime @default(now())
+
+  compositions Composition[]
 }
 
-model RawMaterialItem {
-  id       Int     @id @default(autoincrement())
-  code     String  @unique
-  name     String
-  uom      String  @default("KG")
-  supplier String?
-  status   String  @default("ACTIVE")
-  bomLines BOMLine[]
-}
+model Composition {
+  id            Int         @id @default(autoincrement())
+  recipeId      Int
+  rawMaterialId Int
+  percentage    Float
 
-model BOM {
-  id              Int      @id @default(autoincrement())
-  fgId            Int
-  fg              FinishedGoodItem @relation(fields: [fgId], references: [id])
-  version         Int
-  normalLossPct   Float
-  effectiveFrom   DateTime
-  status          String   @default("ACTIVE")
-  lines           BOMLine[]
-}
+  recipe      Recipe      @relation(fields: [recipeId], references: [id])
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id])
 
-model BOMLine {
-  id       Int    @id @default(autoincrement())
-  bomId    Int
-  bom      BOM    @relation(fields: [bomId], references: [id])
-  rmId     Int
-  rm       RawMaterialItem @relation(fields: [rmId], references: [id])
-  rmPct    Float
-  @@unique([bomId, rmId])
-}
-
-model SalesDemandPlan {
-  id        Int      @id @default(autoincrement())
-  month     String
-  market    String
-  createdBy Int
-  status    String   @default("DRAFT")
-  lines     SalesDemandLine[]
-  @@unique([month, market])
-}
-
-model SalesDemandLine {
-  id           Int @id @default(autoincrement())
-  planId       Int
-  plan         SalesDemandPlan @relation(fields: [planId], references: [id])
-  fgId         Int
-  fg           FinishedGoodItem @relation(fields: [fgId], references: [id])
-  backlockQty  Float @default(0)
-  newOrderQty  Float @default(0)
-}
-
-model SupplyPlan {
-  id        Int      @id @default(autoincrement())
-  month     String
-  createdBy Int
-  status    String   @default("DRAFT")
-  lines     SupplyLine[]
-  @@unique([month])
-}
-
-model SupplyLine {
-  id            Int @id @default(autoincrement())
-  planId        Int
-  plan          SupplyPlan @relation(fields: [planId], references: [id])
-  fgId          Int
-  fg            FinishedGoodItem @relation(fields: [fgId], references: [id])
-  plantId       Int
-  plant         Plant @relation(fields: [plantId], references: [id])
-  openingStock  Float @default(0)
-  productionQty Float @default(0)
-}
-
-model ProductionPlan {
-  id        Int      @id @default(autoincrement())
-  month     String
-  createdBy Int
-  status    String   @default("DRAFT")
-  lines     ProductionLine[]
-  @@unique([month])
-}
-
-model ProductionLine {
-  id        Int @id @default(autoincrement())
-  planId    Int
-  plan      ProductionPlan @relation(fields: [planId], references: [id])
-  fgId      Int
-  fg        FinishedGoodItem @relation(fields: [fgId], references: [id])
-  plantId   Int
-  plant     Plant @relation(fields: [plantId], references: [id])
-  plannedQty Float @default(0)
-}
-
-model RMAvailability {
-  id              Int @id @default(autoincrement())
-  month           String
-  plantId         Int
-  plant           Plant @relation(fields: [plantId], references: [id])
-  rmId            Int
-  rm              RawMaterialItem @relation(fields: [rmId], references: [id])
-  openingStock    Float @default(0)
-  purchasesMonth  Float @default(0)
-  @@unique([month, plantId, rmId])
-}
-
-model AuditLog {
-  id        Int @id @default(autoincrement())
-  entity    String
-  entityId  Int
-  action    String
-  userId    Int
-  timestamp DateTime @default(now())
-  oldValues String?
-  newValues String?
+  @@unique([recipeId, rawMaterialId])
 }
