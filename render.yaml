@@ -9,7 +9,7 @@ services:
     runtime: node
     rootDir: backend-nest
     buildCommand: npm install && npm run build
-    startCommand: sh -c "npx prisma generate && until npx prisma migrate deploy; do echo waiting; sleep 5; done; npm run prisma:seed && node dist/main.js"
+    startCommand: sh -c "npx prisma generate && npx prisma db push && npm run prisma:seed && node dist/main.js"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -24,6 +24,9 @@ services:
           name: mrp-frontend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+      # Strongly recommended so Render doesn’t default to an old Node:
+      - key: NODE_VERSION
+        value: 20
 
   - type: web
     name: mrp-frontend
