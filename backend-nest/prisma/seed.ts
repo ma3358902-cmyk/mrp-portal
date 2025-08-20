@@ -1,78 +1,193 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role, Category, PlantCode } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-/**
- * Safe upsert for optional models. If the model doesn't exist
- * in your Prisma schema, we just log and continue.
- */
-async function upsertIfModelExists(
-  modelName: string,
-  args: { where: any; create: any; update?: any }
-) {
-  const anyPrisma = prisma as any;
-  const model = anyPrisma[modelName];
-  if (!model || typeof model.upsert !== 'function') {
-    console.log(`[seed] Model '${modelName}' not found. Skipping.`);
-    return;
-  }
-  await model.upsert({
-    where: args.where,
-    update: args.update ?? {},
-    create: args.create,
-  });
-  console.log(`[seed] Upserted into ${modelName}:`, args.where);
-}
-
 async function main() {
-  console.log('[seed] Seeding start');
+  // --- Users (admins/heads, etc.) ---
+  const defaultPassword = 'ChangeMe123!';
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-  // ---- 1) Admin user ----
-  const adminEmail = 'admin@mrp.local';
-  const adminPassword = 'admin123';
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
-
-  // NOTE:
-  // - If your User model has a required 'role' field but no exported enum, we pass a string.
-  // - If your User model doesn't have 'role', Prisma will ignore the extra field.
-  await (prisma as any).user.upsert({
-    where: { email: adminEmail },
+  // Upsert a few users with roles
+  await prisma.user.upsert({
+    where: { email: 'admin@mrp.local' },
     update: {},
     create: {
-      email: adminEmail,
-      passwordHash,              // <- adjust field name if your schema uses e.g. 'password'
-      role: 'ADMIN' as any,      // <- string fallback; ignored if 'role' not in schema
-      name: 'Admin',             // <- remove if 'name' doesn't exist or isn't desired
+      name: 'System Admin',
+      email: 'admin@mrp.local',
+      passwordHash,
+      role: Role.ADMIN,
     },
   });
-  console.log('[seed] Admin user ready:', adminEmail);
 
-  // ---- 2) Plants (safe even if Plant model is absent) ----
-  const plants = [
-    { code: 'IPAK',   name: 'BOPP Plant - IPAK' },
-    { code: 'GPAK',   name: 'BOPP Plant - GPAK' },
-    { code: 'CPAK',   name: 'CPP Plant - CPAK' },
-    { code: 'PETAPK', name: 'BOPET Plant - PETAPK' },
-  ];
+  await prisma.user.upsert({
+    where: { email: 'sales.local@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Sales - Local',
+      email: 'sales.local@mrp.local',
+      passwordHash,
+      role: Role.SALES_LOCAL,
+    },
+  });
 
-  for (const p of plants) {
-    await upsertIfModelExists('plant', {
-      where: { code: p.code },
-      create: { code: p.code, name: p.name },
-      update: {},
-    });
-  }
+  await prisma.user.upsert({
+    where: { email: 'sales.export@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Sales - Export',
+      email: 'sales.export@mrp.local',
+      passwordHash,
+      role: Role.SALES_EXPORT,
+    },
+  });
 
-  console.log('[seed] Seeding complete');
+  await prisma.user.upsert({
+    where: { email: 'ops@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Operations & Production',
+      email: 'ops@mrp.local',
+      passwordHash,
+      role: Role.OPS,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: 'supply@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Supply Chain',
+      email: 'supply@mrp.local',
+      passwordHash,
+      role: Role.SUPPLY_CHAIN,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: 'treasury@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Treasury',
+      email: 'treasury@mrp.local',
+      passwordHash,
+      role: Role.TREASURY,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: 'finance@mrp.local' },
+    update: {},
+    create: {
+      name: 'Head of Finance',
+      email: 'finance@mrp.local',
+      passwordHash,
+      role: Role.FINANCE,
+    },
+  });
+
+  // --- Raw Materials master ---
+  const rmPP = await prisma.rawMaterial.upsert({
+    where: { code: 'RM-PP' },
+    update: {},
+    create: {
+      code: 'RM-PP',
+      name: 'Polypropylene (PP)',
+      description: 'Base polymer for BOPP',
+      supplier: 'Supplier-A',
+    },
+  });
+
+  const rmPE = await prisma.rawMaterial.upsert({
+    where: { code: 'RM-PE' },
+    update: {},
+    create: {
+      code: 'RM-PE',
+      name: 'Polyethylene (PE)',
+      description: 'Common CPP component',
+      supplier: 'Supplier-B',
+    },
+  });
+
+  const rmPET = await prisma.rawMaterial.upsert({
+    where: { code: 'RM-PET' },
+    update: {},
+    create: {
+      code: 'RM-PET',
+      name: 'Polyethylene Terephthalate (PET)',
+      description: 'Base polymer for BOPET',
+      supplier: 'Supplier-C',
+    },
+  });
+
+  // --- Finished Goods (Recipes/BOM) ---
+  // Example BOPP film
+  await prisma.recipe.upsert({
+    where: { itemCode: 'BOPP-20MIC' },
+    update: {},
+    create: {
+      itemCode: 'BOPP-20MIC',
+      itemName: 'BOPP Film 20 Micron',
+      description: 'General purpose BOPP film',
+      category: Category.BOPP,
+      normalLoss: 2.5,
+      compositions: {
+        create: [
+          { rawMaterialId: rmPP.id, percentage: 98.5 },
+          // 1.5% assumed loss covered by normalLoss; if you want an additive, add here
+        ],
+      },
+    },
+  });
+
+  // Example CPP film
+  await prisma.recipe.upsert({
+    where: { itemCode: 'CPP-25MIC' },
+    update: {},
+    create: {
+      itemCode: 'CPP-25MIC',
+      itemName: 'CPP Film 25 Micron',
+      description: 'Cast polypropylene film',
+      category: Category.CPP,
+      normalLoss: 3.0,
+      compositions: {
+        create: [
+          { rawMaterialId: rmPE.id, percentage: 97.0 },
+        ],
+      },
+    },
+  });
+
+  // Example BOPET film
+  await prisma.recipe.upsert({
+    where: { itemCode: 'BOPET-12MIC' },
+    update: {},
+    create: {
+      itemCode: 'BOPET-12MIC',
+      itemName: 'BOPET Film 12 Micron',
+      description: 'Polyester film',
+      category: Category.BOPET,
+      normalLoss: 2.0,
+      compositions: {
+        create: [
+          { rawMaterialId: rmPET.id, percentage: 98.0 },
+        ],
+      },
+    },
+  });
+
+  // (Optional) Show the plant codes exist as enum in code—not a DB table.
+  // You’ll choose plants in your app UI using PlantCode.IPAK / GPAK / CPAK / PETPAK
+  void PlantCode;
 }
 
 main()
-  .catch((e) => {
-    console.error('[seed] Error:', e);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
+  .then(async () => {
+    console.log('✅ Seed completed.');
     await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error('❌ Seed error:', e);
+    await prisma.$disconnect();
+    process.exit(1);
   });
