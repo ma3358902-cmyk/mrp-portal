@@ -8,11 +8,9 @@ services:
     plan: free
     runtime: node
     rootDir: backend-nest
-
-    # Environment (pin Node and wire services)
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: sh -c "until npx prisma migrate deploy; do echo waiting; sleep 5; done; node prisma/seed.js; node dist/main.js"
     envVars:
-      - key: NODE_VERSION
-        value: 18.19.0
       - key: DATABASE_URL
         fromDatabase:
           name: mrp-db
@@ -27,24 +25,16 @@ services:
           type: web
           envVarKey: RENDER_EXTERNAL_URL
 
-    # Build with prisma generate; be lenient on peer deps for Render builder
-    buildCommand: >-
-      corepack enable || true &&
-      npm ci --legacy-peer-deps || npm install --legacy-peer-deps &&
-      npx prisma generate &&
-      npm run build
-
-    # Wait for DB → run migrations → seed → start API (single-line to avoid YAML quoting issues)
-    startCommand: >-
-      sh -c "echo 'Waiting for DB...'; until npx prisma migrate deploy; do echo 'DB not ready yet, retrying in 5s...'; sleep 5; done; node prisma/seed.js; node dist/main.js"
-
   - type: web
     name: mrp-frontend
     plan: free
     runtime: node
     rootDir: frontend-next
-
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: 18.19.0
-      - key: NEXT_PUBLIC_AP
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: mrp-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
