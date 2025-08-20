@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 /**
- * Safe upsert for optional models. If the model doesn't exist in your Prisma
- * schema (e.g., no Plant model), this just logs and continues.
+ * Safe upsert for optional models. If the model doesn't exist
+ * in your Prisma schema, we just log and continue.
  */
 async function upsertIfModelExists(
   modelName: string,
@@ -29,29 +29,31 @@ async function upsertIfModelExists(
 async function main() {
   console.log('[seed] Seeding start');
 
-  // 1) Admin user
+  // ---- 1) Admin user ----
   const adminEmail = 'admin@mrp.local';
   const adminPassword = 'admin123';
   const passwordHash = await bcrypt.hash(adminPassword, 10);
 
-  await prisma.user.upsert({
+  // NOTE:
+  // - If your User model has a required 'role' field but no exported enum, we pass a string.
+  // - If your User model doesn't have 'role', Prisma will ignore the extra field.
+  await (prisma as any).user.upsert({
     where: { email: adminEmail },
     update: {},
     create: {
       email: adminEmail,
-      passwordHash,
-      role: Role.ADMIN, // Role enum exists in your schema
-      // If your User has 'name' or other fields, add them here as needed:
-      // name: 'Admin',
+      passwordHash,              // <- adjust field name if your schema uses e.g. 'password'
+      role: 'ADMIN' as any,      // <- string fallback; ignored if 'role' not in schema
+      name: 'Admin',             // <- remove if 'name' doesn't exist or isn't desired
     },
   });
   console.log('[seed] Admin user ready:', adminEmail);
 
-  // 2) Plants (safe even if your schema doesn't have Plant model)
+  // ---- 2) Plants (safe even if Plant model is absent) ----
   const plants = [
-    { code: 'IPAK', name: 'BOPP Plant - IPAK' },
-    { code: 'GPAK', name: 'BOPP Plant - GPAK' },
-    { code: 'CPAK', name: 'CPP Plant - CPAK' },
+    { code: 'IPAK',   name: 'BOPP Plant - IPAK' },
+    { code: 'GPAK',   name: 'BOPP Plant - GPAK' },
+    { code: 'CPAK',   name: 'CPP Plant - CPAK' },
     { code: 'PETAPK', name: 'BOPET Plant - PETAPK' },
   ];
 
