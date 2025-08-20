@@ -1,9 +1,11 @@
 databases:
   - name: mrp-db
+    plan: free
 
 services:
   - type: web
     name: mrp-backend
+    plan: free
     runtime: node
     rootDir: backend-nest
     buildCommand: npm install && npx prisma generate && npm run build
@@ -26,6 +28,7 @@ services:
 
   - type: web
     name: mrp-frontend
+    plan: free
     runtime: node
     rootDir: frontend-next
     buildCommand: npm install && npm run build
