@@ -1,0 +1,38 @@
+databases:
+  - name: mrp-db
+
+services:
+  - type: web
+    name: mrp-backend
+    runtime: node
+    rootDir: backend-nest
+    buildCommand: npm install && npx prisma generate && npm run build
+    preDeployCommand: npx prisma migrate deploy && npm run prisma:seed
+    startCommand: node dist/main.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mrp-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 8080
+      - key: CORS_ORIGIN
+        fromService:
+          name: mrp-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+
+  - type: web
+    name: mrp-frontend
+    runtime: node
+    rootDir: frontend-next
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: mrp-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
