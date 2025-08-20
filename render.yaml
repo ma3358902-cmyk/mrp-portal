@@ -9,8 +9,8 @@ services:
     runtime: node
     rootDir: backend-nest
     buildCommand: npm install && npx prisma generate && npm run build
-    preDeployCommand: npx prisma migrate deploy && npm run prisma:seed
-    startCommand: node dist/main.js
+    # Free tier doesn't support preDeployCommand; run migrations + seed on start.
+    startCommand: sh -c "npx prisma migrate deploy && node prisma/seed.js && node dist/main.js"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
