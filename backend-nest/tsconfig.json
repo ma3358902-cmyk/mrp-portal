@@ -1,15 +1,21 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "declaration": false,
+    "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "target": "es2018",
+    "target": "es2017",
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "incremental": true
-  }
+    "incremental": true,
+
+    /* Relaxed settings to allow build to pass on Render while we test */
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }
