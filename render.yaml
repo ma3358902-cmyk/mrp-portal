@@ -8,11 +8,10 @@ services:
     plan: free
     runtime: node
     rootDir: backend-nest
-    buildCommand: npm install && npx prisma generate && npm run build
-    # Single-line start to avoid YAML quoting issues; retries until DB is ready.
-    startCommand: >-
-      sh -c "echo 'Waiting for DB...'; until npx prisma migrate deploy; do echo 'DB not ready yet, retrying in 5s...'; sleep 5; done; node prisma/seed.js; node dist/main.js"
+    # Pin Node and make install robust on Render builders.
     envVars:
+      - key: NODE_VERSION
+        value: 18.19.0
       - key: DATABASE_URL
         fromDatabase:
           name: mrp-db
@@ -26,17 +25,30 @@ services:
           name: mrp-frontend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+    buildCommand: >-
+      corepack enable || true &&
+      npm ci --legacy-peer-deps || npm install --legacy-peer-deps &&
+      npx prisma generate &&
+      npm run build
+    # Wait for DB, run migrations & seed, then boot API.
+    startCommand: >-
+      sh -c "echo 'Waiting for DB...'; until npx prisma migrate deploy; do echo 'DB not ready yet, retrying in 5s...'; sleep 5; done; node prisma/seed.js; node dist/main.js"
 
   - type: web
     name: mrp-frontend
     plan: free
     runtime: node
     rootDir: frontend-next
-    buildCommand: npm install && npm run build
-    startCommand: npm start
     envVars:
+      - key: NODE_VERSION
+        value: 18.19.0
       - key: NEXT_PUBLIC_API_URL
         fromService:
           name: mrp-backend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+    buildCommand: >-
+      corepack enable || true &&
+      npm ci --legacy-peer-deps || npm install --legacy-peer-deps &&
+      npm run build
+    startCommand: npm start
