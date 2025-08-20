@@ -1,31 +1,88 @@
-import { INestApplication, Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+// prisma/schema.prisma
 
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
-    // Pass DATABASE_URL from env (Render sets it from your blueprint)
-    super({
-      datasources: {
-        db: { url: process.env.DATABASE_URL },
-      },
-    });
-  }
+generator client {
+  provider = "prisma-client-js"
+}
 
-  async onModuleInit() {
-    await this.$connect();
-  }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-  /**
-   * Call this once in your bootstrap after creating the Nest app:
-   *   const app = await NestFactory.create(AppModule);
-   *   const prisma = app.get(PrismaService);
-   *   await prisma.enableShutdownHooks(app);
-   */
-  async enableShutdownHooks(app: INestApplication) {
-    // Cast to any to avoid TS complaining about event name typings
-    (this as any).$on('beforeExit', async () => {
-      await app.close();
-    });
-  }
+enum Role {
+  ADMIN
+  USER
+}
+
+enum Category {
+  BOPP
+  CPP
+  BOPET
+}
+
+enum PlantCode {
+  IPAK
+  GPAK
+  CPAK
+  PETPAK
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now())
+}
+
+model FinishedGood {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  name         String
+  category     Category?
+  subCategory  String?
+  uom          String    @default("KG")
+
+  boms         BOM[]
+}
+
+model RawMaterial {
+  id           Int     @id @default(autoincrement())
+  code         String  @unique
+  name         String
+  uom          String  @default("KG")
+  supplier     String?
+  bomLines     BOMLine[]
+}
+
+model Plant {
+  id    Int      @id @default(autoincrement())
+  code  PlantCode @unique
+  name  String
+}
+
+model BOM {
+  id        Int        @id @default(autoincrement())
+  fgId      Int
+  fg        FinishedGood @relation(fields: [fgId], references: [id])
+  version   Int        @default(1)
+  status    String     @default("ACTIVE")
+
+  lines     BOMLine[]
+  createdAt DateTime   @default(now())
+
+  @@index([fgId])
+}
+
+model BOMLine {
+  id     Int         @id @default(autoincrement())
+  bomId  Int
+  bom    BOM         @relation(fields: [bomId], references: [id])
+  rmId   Int
+  rm     RawMaterial @relation(fields: [rmId], references: [id])
+  qty    Float       @default(0)
+
+  @@index([bomId])
+  @@index([rmId])
 }
