@@ -9,7 +9,7 @@ services:
     runtime: node
     rootDir: backend-nest
     buildCommand: npm install && npm run build
-    startCommand: sh -c "npx prisma generate && until npx prisma migrate deploy; do echo waiting; sleep 5; done; node prisma/seed.js; node dist/main.js"
+    startCommand: sh -c "npx prisma generate && until npx prisma migrate deploy; do echo waiting; sleep 5; done; npm run prisma:seed && node dist/main.js"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
