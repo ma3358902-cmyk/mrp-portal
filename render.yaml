@@ -9,7 +9,7 @@ services:
     runtime: node
     rootDir: backend-nest
     buildCommand: npm install && npm run build
-    startCommand: sh -c "npx prisma generate && npx prisma db push && npm run prisma:seed && ts-node --transpile-only -r tsconfig-paths/register src/main.ts"
+    startCommand: sh -c "npx prisma generate && npx prisma db push && npm run prisma:seed && npx ts-node --transpile-only -r tsconfig-paths/register src/main.ts"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
